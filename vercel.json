@@ -1,18 +1,17 @@
-{
+﻿{
   "version": 2,
   "functions": {
     "api/cron.py": {
       "runtime": "python3.11",
       "maxDuration": 300
+    },
+    "api/health.py": {
+      "runtime": "python3.11",
+      "maxDuration": 30
     }
   },
   "routes": [
-    { "src": "/api/cron", "dest": "/api/cron.py" }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron",
-      "schedule": "0 8 * * *"
-    }
+    { "src": "/api/cron", "dest": "/api/cron.py" },
+    { "src": "/api/health", "dest": "/api/health.py" }
   ]
 }
