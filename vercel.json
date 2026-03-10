@@ -1,4 +1,14 @@
-﻿{
+{
+  "version": 2,
+  "functions": {
+    "api/cron.py": {
+      "runtime": "python3.11",
+      "maxDuration": 300
+    }
+  },
+  "routes": [
+    { "src": "/api/cron", "dest": "/api/cron.py" }
+  ],
   "crons": [
     {
       "path": "/api/cron",
