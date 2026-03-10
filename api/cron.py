@@ -206,7 +206,19 @@ class handler(BaseHTTPRequestHandler):
         gh_branch = os.environ.get("GH_BRANCH", "master").strip() or "master"
 
         if not gh_token or not gh_repo:
-            _json_response(self, 500, {"ok": False, "error": "Missing GH_TOKEN or GH_REPO"})
+            _json_response(
+                self,
+                500,
+                {
+                    "ok": False,
+                    "error": "Missing GH_TOKEN or GH_REPO",
+                    "env_debug": {
+                        "has_GH_TOKEN": bool(gh_token),
+                        "has_GH_REPO": bool(gh_repo),
+                        "branch": gh_branch,
+                    },
+                },
+            )
             return
 
         try:
@@ -245,5 +257,3 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         return self.do_GET()
-
-
