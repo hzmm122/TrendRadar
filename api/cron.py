@@ -128,19 +128,24 @@ def _get_today_str(tz_name: str) -> str:
     return datetime.now(tz).strftime("%Y-%m-%d")
 
 
+def _get_data_dir() -> Path:
+    return Path(os.environ.get("TRENDRADAR_DATA_DIR", "output"))
+
+
 def _collect_upload_paths(date_str: str) -> list[Path]:
     paths: list[Path] = []
+    base_dir = _get_data_dir()
 
     # Only sync latest reports to keep commits small.
     candidates = [
-        Path("output") / "index.html",
+        base_dir / "index.html",
     ]
 
-    latest_dir = Path("output") / "html" / "latest"
+    latest_dir = base_dir / "html" / "latest"
     if latest_dir.exists():
         candidates.extend(latest_dir.glob("*.html"))
 
-    snapshot_dir = Path("output") / "html" / date_str
+    snapshot_dir = base_dir / "html" / date_str
     if os.environ.get("PUSH_HISTORY", "").strip().lower() in ("1", "true", "yes"):
         if snapshot_dir.exists():
             candidates.extend(snapshot_dir.glob("*.html"))
@@ -148,8 +153,8 @@ def _collect_upload_paths(date_str: str) -> list[Path]:
     # SQLite daily DBs (for de-dup + once-per-period)
     candidates.extend(
         [
-            Path("output") / "news" / f"{date_str}.db",
-            Path("output") / "rss" / f"{date_str}.db",
+            base_dir / "news" / f"{date_str}.db",
+            base_dir / "rss" / f"{date_str}.db",
         ]
     )
 
@@ -160,27 +165,31 @@ def _collect_upload_paths(date_str: str) -> list[Path]:
     return paths
 
 
-def _relative_repo_path(path: Path) -> str:
-    return path.as_posix()
+def _relative_repo_path(path: Path, base_dir: Path) -> str:
+    rel = path.relative_to(base_dir)
+    return f"output/{rel.as_posix()}"
 
 
 def _sync_from_github(repo: str, branch: str, token: str, date_str: str) -> int:
     # Pull today's DBs if present so schedule/dup checks work
     pulled = 0
-    for db_path in (
-        Path("output") / "news" / f"{date_str}.db",
-        Path("output") / "rss" / f"{date_str}.db",
+    base_dir = _get_data_dir()
+    for db_rel in (
+        Path("news") / f"{date_str}.db",
+        Path("rss") / f"{date_str}.db",
     ):
-        if _download_if_exists(repo, branch, _relative_repo_path(db_path), token, db_path):
+        repo_path = f"output/{db_rel.as_posix()}"
+        dest = base_dir / db_rel
+        if _download_if_exists(repo, branch, repo_path, token, dest):
             pulled += 1
     return pulled
-
 
 def _sync_to_github(repo: str, branch: str, token: str, date_str: str) -> dict:
     updated: list[str] = []
     skipped: list[str] = []
+    base_dir = _get_data_dir()
     for path in _collect_upload_paths(date_str):
-        repo_path = _relative_repo_path(path)
+        repo_path = _relative_repo_path(path, base_dir)
         status = _github_put_file(
             repo=repo,
             branch=branch,
@@ -238,7 +247,20 @@ class handler(BaseHTTPRequestHandler):
             # Avoid opening browser inside serverless
             os.environ["GITHUB_ACTIONS"] = "true"
 
+            data_dir = os.environ.get("TRENDRADAR_DATA_DIR", "").strip()
+            if not data_dir:
+                if os.environ.get("VERCEL") == "1" or os.environ.get("VERCEL_REGION"):
+                    data_dir = "/tmp/trendradar"
+                else:
+                    data_dir = "output"
+                os.environ["TRENDRADAR_DATA_DIR"] = data_dir
+            _log(f"Data dir: {data_dir}")
+
             config = load_config()
+            config.setdefault("STORAGE", {})
+            config["STORAGE"].setdefault("LOCAL", {})
+            config["STORAGE"]["LOCAL"]["DATA_DIR"] = data_dir
+            config["STORAGE"]["BACKEND"] = "local"
             if ai_only and ai_max_raw:
                 try:
                     ai_max = max(1, int(ai_max_raw))
@@ -325,7 +347,9 @@ class handler(BaseHTTPRequestHandler):
             else:
                 # Full run: crawl + analyze + notify
                 _log("Running TrendRadar...")
-                run_trendradar()
+                analyzer = NewsAnalyzer(config=config)
+                analyzer.run()
+                analyzer.ctx.cleanup()
 
             result = _sync_to_github(gh_repo, gh_branch, gh_token, date_str)
             duration_ms = int((time.time() - started_at) * 1000)
@@ -349,5 +373,9 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         return self.do_GET()
+
+
+
+
 
 
