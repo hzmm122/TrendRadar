@@ -27,6 +27,8 @@ import requests
 
 from trendradar.core import load_config
 from trendradar.__main__ import main as run_trendradar
+from trendradar.__main__ import NewsAnalyzer
+from trendradar.core.scheduler import ResolvedSchedule
 
 
 def _log(message: str) -> None:
@@ -201,6 +203,17 @@ class handler(BaseHTTPRequestHandler):
         if not _require_secret(self):
             return
 
+        query = parse_qs(urlparse(self.path).query)
+        fast = (query.get("fast") or [""])[0].strip().lower() in ("1", "true", "yes")
+        ai_only = (query.get("ai_only") or [""])[0].strip().lower() in ("1", "true", "yes")
+        ai_max_raw = (query.get("ai_max") or [""])[0].strip()
+        if fast:
+            # Fast mode skips AI analysis to keep request under cron-job.org timeout.
+            os.environ["AI_ANALYSIS_ENABLED"] = "false"
+        if ai_only:
+            # Force AI analysis on in AI-only mode.
+            os.environ["AI_ANALYSIS_ENABLED"] = "true"
+
         gh_token = os.environ.get("GH_TOKEN", "").strip()
         gh_repo = os.environ.get("GH_REPO", "").strip()
         gh_branch = os.environ.get("GH_BRANCH", "master").strip() or "master"
@@ -226,15 +239,93 @@ class handler(BaseHTTPRequestHandler):
             os.environ["GITHUB_ACTIONS"] = "true"
 
             config = load_config()
+            if ai_only and ai_max_raw:
+                try:
+                    ai_max = max(1, int(ai_max_raw))
+                    config.setdefault("AI_ANALYSIS", {})
+                    config["AI_ANALYSIS"]["MAX_NEWS_FOR_ANALYSIS"] = ai_max
+                    _log(f"AI-only max news override: {ai_max}")
+                except ValueError:
+                    _log(f"Invalid ai_max value: {ai_max_raw}")
             tz_name = config.get("TIMEZONE", "Asia/Shanghai")
             date_str = _get_today_str(tz_name)
 
             pulled = _sync_from_github(gh_repo, gh_branch, gh_token, date_str)
             _log(f"Pulled {pulled} DB file(s) from GitHub")
 
-            # Run TrendRadar
-            _log("Running TrendRadar...")
-            run_trendradar()
+            if ai_only:
+                # AI-only: use stored data, skip crawling.
+                _log("Running AI-only analysis (no crawling)...")
+                analyzer = NewsAnalyzer(config=config)
+                analysis_data = analyzer._load_analysis_data()
+                if not analysis_data:
+                    raise RuntimeError("No data for AI analysis (today's DB missing or empty)")
+
+                (
+                    all_results,
+                    id_to_name,
+                    title_info,
+                    new_titles,
+                    word_groups,
+                    filter_words,
+                    global_filters,
+                ) = analysis_data
+
+                standalone_data = analyzer._prepare_standalone_data(
+                    all_results, id_to_name, title_info, None
+                )
+
+                # Always analyze + push in AI-only mode (ignore schedule windows).
+                schedule = ResolvedSchedule(
+                    period_key=None,
+                    period_name=None,
+                    day_plan="ai_only",
+                    collect=False,
+                    analyze=True,
+                    push=True,
+                    report_mode=analyzer.report_mode,
+                    ai_mode=analyzer.report_mode,
+                    once_analyze=False,
+                    once_push=False,
+                )
+
+                stats, html_file, ai_result = analyzer._run_analysis_pipeline(
+                    all_results,
+                    analyzer.report_mode,
+                    title_info,
+                    new_titles,
+                    word_groups,
+                    filter_words,
+                    id_to_name,
+                    failed_ids=[],
+                    global_filters=global_filters,
+                    rss_items=None,
+                    rss_new_items=None,
+                    standalone_data=standalone_data,
+                    schedule=schedule,
+                )
+
+                mode_strategy = analyzer._get_mode_strategy()
+                analyzer._send_notification_if_needed(
+                    stats,
+                    mode_strategy["report_type"],
+                    analyzer.report_mode,
+                    failed_ids=[],
+                    new_titles=new_titles,
+                    id_to_name=id_to_name,
+                    html_file_path=html_file,
+                    rss_items=None,
+                    rss_new_items=None,
+                    standalone_data=standalone_data,
+                    ai_result=ai_result,
+                    current_results=all_results,
+                    schedule=schedule,
+                )
+                analyzer.ctx.cleanup()
+            else:
+                # Full run: crawl + analyze + notify
+                _log("Running TrendRadar...")
+                run_trendradar()
 
             result = _sync_to_github(gh_repo, gh_branch, gh_token, date_str)
             duration_ms = int((time.time() - started_at) * 1000)
@@ -246,6 +337,7 @@ class handler(BaseHTTPRequestHandler):
                 {
                     "ok": True,
                     "date": date_str,
+                    "fast": fast,
                     "updated": result.get("updated", []),
                     "skipped": result.get("skipped", []),
                     "duration_ms": duration_ms,
@@ -257,3 +349,5 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         return self.do_GET()
+
+
