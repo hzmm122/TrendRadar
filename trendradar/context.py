@@ -1,4 +1,4 @@
-# coding=utf-8
+﻿# coding=utf-8
 """
 应用上下文模块
 
@@ -307,7 +307,7 @@ class AppContext:
             mode=mode,
             update_info=update_info,
             rank_threshold=self.rank_threshold,
-            output_dir="output",
+            output_dir=self.config.get("STORAGE", {}).get("LOCAL", {}).get("DATA_DIR", "output"),
             date_folder=self.format_date(),
             time_filename=self.format_time(),
             render_html_func=lambda *args, **kwargs: self.render_html(*args, rss_items=rss_items, rss_new_items=rss_new_items, ai_analysis=ai_analysis, standalone_data=standalone_data, **kwargs),
@@ -479,3 +479,4 @@ class AppContext:
             self._storage_manager.cleanup_old_data()
             self._storage_manager.cleanup()
             self._storage_manager = None
+
