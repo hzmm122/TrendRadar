@@ -246,6 +246,7 @@ class handler(BaseHTTPRequestHandler):
         try:
             # Avoid opening browser inside serverless
             os.environ["GITHUB_ACTIONS"] = "true"
+            os.environ["TRENDRADAR_SKIP_ROOT_INDEX"] = "true"
 
             data_dir = os.environ.get("TRENDRADAR_DATA_DIR", "").strip()
             if not data_dir:
@@ -373,6 +374,7 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         return self.do_GET()
+
 
 
 
