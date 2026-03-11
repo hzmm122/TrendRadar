@@ -26,12 +26,16 @@ import pytz
 import requests
 
 from trendradar.core import load_config
+from trendradar.ai.formatter import render_ai_analysis_html_rich
 from trendradar.__main__ import main as run_trendradar
 from trendradar.__main__ import NewsAnalyzer
 from trendradar.core.scheduler import ResolvedSchedule
 
+AI_SECTION_START = "<!-- AI_SECTION_START -->"
+AI_SECTION_END = "<!-- AI_SECTION_END -->"
 
-def _log(message: str) -> None:
+
+message: str) -> None:
     print(f"[cron] {message}", flush=True)
 
 
@@ -206,6 +210,50 @@ def _sync_to_github(repo: str, branch: str, token: str, date_str: str) -> dict:
     return {"updated": updated, "skipped": skipped}
 
 
+def _replace_ai_section(html: str, ai_html: str) -> str:
+    if not ai_html:
+        return html
+    wrapped = f"{AI_SECTION_START}{ai_html}{AI_SECTION_END}"
+    if AI_SECTION_START in html and AI_SECTION_END in html:
+        pre, rest = html.split(AI_SECTION_START, 1)
+        _, post = rest.split(AI_SECTION_END, 1)
+        return pre + wrapped + post
+
+    # Fallback: try to replace existing ai-section block just before footer
+    pattern = r"<div class=\"ai-section\">[\s\S]*?</div>\s*(?=<div class=\"footer\">)"
+    if re.search(pattern, html):
+        return re.sub(pattern, ai_html + "\n", html, count=1)
+
+    # Final fallback: insert before footer
+    marker = '<div class="footer">'
+    if marker in html:
+        return html.replace(marker, ai_html + marker, 1)
+    return html
+
+
+def _update_ai_section_files(data_dir: str, report_mode: str, ai_html: str) -> list[str]:
+    updated = []
+    if not ai_html:
+        return updated
+    base_dir = Path(data_dir)
+    candidates = [
+        base_dir / "index.html",
+        base_dir / "html" / "latest" / f"{report_mode}.html",
+    ]
+    for path in candidates:
+        if not path.exists():
+            _log(f"AI-only: target not found, skip {path}")
+            continue
+        try:
+            content = path.read_text(encoding="utf-8")
+            new_content = _replace_ai_section(content, ai_html)
+            if new_content != content:
+                path.write_text(new_content, encoding="utf-8")
+                updated.append(str(path))
+        except Exception as exc:
+            _log(f"AI-only: failed to update {path}: {exc}")
+    return updated
+
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         started_at = time.time()
@@ -312,6 +360,10 @@ class handler(BaseHTTPRequestHandler):
                     once_push=False,
                 )
 
+                config.setdefault("STORAGE", {}).setdefault("FORMATS", {})
+
+                config["STORAGE"]["FORMATS"]["HTML"] = False
+
                 stats, html_file, ai_result = analyzer._run_analysis_pipeline(
                     all_results,
                     analyzer.report_mode,
@@ -327,6 +379,19 @@ class handler(BaseHTTPRequestHandler):
                     standalone_data=standalone_data,
                     schedule=schedule,
                 )
+
+                # Update AI section in existing HTML without rewriting other sections
+                ai_html = render_ai_analysis_html_rich(ai_result) if ai_result else ""
+                _update_ai_section_files(data_dir, analyzer.report_mode, ai_html)
+
+                latest_file = Path(data_dir) / "html" / "latest" / f"{analyzer.report_mode}.html"
+                index_file = Path(data_dir) / "index.html"
+                if latest_file.exists():
+                    html_file = str(latest_file)
+                elif index_file.exists():
+                    html_file = str(index_file)
+                else:
+                    html_file = None
 
                 mode_strategy = analyzer._get_mode_strategy()
                 analyzer._send_notification_if_needed(
@@ -374,6 +439,13 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         return self.do_GET()
+
+
+
+
+
+
+
 
 
 
