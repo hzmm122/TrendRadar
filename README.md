@@ -96,7 +96,7 @@
 - [小众软件](https://mp.weixin.qq.com/s/fvutkJ_NPUelSW9OGK39aA) - 开源软件推荐平台
 - [LinuxDo 社区](https://linux.do/) - 技术爱好者的聚集地
 - [阮一峰周刊](https://github.com/ruanyf/weekly) - 技术圈有影响力的周刊
-
+<!-- deploy -->
 ### 观众支持
 
 > 感谢**给予资金支持**的朋友们，你们的慷慨已化身为键盘旁的零食饮料，陪伴着项目的每一次迭代。
