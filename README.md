@@ -3745,9 +3745,7 @@ MCP Inspector 是官方调试工具，用于测试 MCP 连接：
 
 ### 其余项目
 
-> 📍 毛主席足迹地图 - 交互式动态展示1893-1976年完整轨迹。欢迎诸位同志贡献数据
 
-- https://github.com/sansan0/mao-map
 
 > 哔哩哔哩(bilibili)评论区数据可视化分析软件
 
