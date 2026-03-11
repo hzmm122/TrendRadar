@@ -15,6 +15,7 @@ Optional env:
 
 import base64
 import json
+import re
 import os
 import time
 from datetime import datetime
@@ -35,7 +36,7 @@ AI_SECTION_START = "<!-- AI_SECTION_START -->"
 AI_SECTION_END = "<!-- AI_SECTION_END -->"
 
 
-message: str) -> None:
+def _log(message: str) -> None:
     print(f"[cron] {message}", flush=True)
 
 
@@ -439,6 +440,8 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         return self.do_GET()
+
+
 
 
 
