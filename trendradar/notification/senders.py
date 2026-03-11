@@ -1,4 +1,4 @@
-# coding=utf-8
+﻿# coding=utf-8
 """
 消息发送器模块
 
@@ -680,7 +680,7 @@ def send_to_email(
 
         # 设置邮件主题
         now = get_time_func() if get_time_func else datetime.now()
-        subject = f"TrendRadar 热点分析报告 - {report_type} - {now.strftime('%m月%d日 %H:%M')}"
+        subject = f"热点分析报告-{report_type}"
         msg["Subject"] = Header(subject, "utf-8")
 
         # 设置其他标准 header
@@ -1389,3 +1389,4 @@ def send_to_generic_webhook(
     print(f"{log_prefix}所有 {len(batches)} 批次发送完成 [{report_type}]")
 
     return True
+
