@@ -1,4 +1,4 @@
-# coding=utf-8
+﻿# coding=utf-8
 """
 报告生成模块
 
@@ -7,6 +7,7 @@
 - generate_html_report: 生成 HTML 报告
 """
 
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Callable
 
@@ -229,8 +230,10 @@ def generate_html_report(
         f.write(html_content)
 
     # 根目录 index.html（供 GitHub Pages 访问）
-    root_index = Path("index.html")
-    with open(root_index, "w", encoding="utf-8") as f:
-        f.write(html_content)
+    if os.environ.get("TRENDRADAR_SKIP_ROOT_INDEX", "").strip().lower() not in ("1", "true", "yes"):
+        root_index = Path("index.html")
+        with open(root_index, "w", encoding="utf-8") as f:
+            f.write(html_content)
 
     return snapshot_file
+
