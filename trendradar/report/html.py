@@ -1,4 +1,4 @@
-# coding=utf-8
+﻿# coding=utf-8
 """
 HTML 报告渲染模块
 
@@ -1319,6 +1319,8 @@ def render_html_content(
 
     # 生成 AI 分析 HTML
     ai_html = render_ai_analysis_html_rich(ai_analysis) if ai_analysis else ""
+    if ai_html:
+        ai_html = f"<!-- AI_SECTION_START -->{ai_html}<!-- AI_SECTION_END -->"
 
     # 准备各区域内容映射
     region_contents = {
@@ -1366,11 +1368,7 @@ def render_html_content(
             </div>
 
             <div class="footer">
-                <div class="footer-content">
-                    由 <span class="project-name">TrendRadar</span> 生成 ·
-                    <a href="https://github.com/sansan0/TrendRadar" target="_blank" class="footer-link">
-                        GitHub 开源项目
-                    </a>"""
+                <div class="footer-content">"""
 
     if update_info:
         html += f"""
@@ -1696,3 +1694,5 @@ def render_html_content(
     """
 
     return html
+
+
