@@ -129,8 +129,8 @@ def _get_today_str(tz_name: str) -> str:
 def _collect_upload_paths(date_str: str) -> list[Path]:
     paths: list[Path] = []
 
+    # Only sync latest reports to keep commits small.
     candidates = [
-        Path("index.html"),
         Path("output") / "index.html",
     ]
 
