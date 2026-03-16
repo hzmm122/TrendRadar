@@ -1,4 +1,4 @@
-# coding=utf-8
+﻿# coding=utf-8
 """
 AI 分析结果格式化模块
 
@@ -329,10 +329,9 @@ def render_ai_analysis_html_rich(result: AIAnalysisResult) -> str:
 
     # 检查是否成功
     if not result.success:
-        error_msg = result.error or "未知错误"
-        return f"""
+        return """
                 <div class="ai-section">
-                    <div class="ai-error">⚠️ AI 分析失败: {_escape_html(str(error_msg))}</div>
+                    <div class="ai-error">⚠️ AI 分析失败：请检查 AI_API_KEY 或模型配置</div>
                 </div>"""
 
     ai_html = """
@@ -400,3 +399,4 @@ def render_ai_analysis_html_rich(result: AIAnalysisResult) -> str:
     ai_html += """
                 </div>"""
     return ai_html
+

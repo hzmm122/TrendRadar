@@ -11,6 +11,8 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Callable
 
+from trendradar.report.helpers import dedup_titles, dedup_titles_fuzzy
+
 
 def prepare_report_data(
     stats: List[Dict],
@@ -22,6 +24,8 @@ def prepare_report_data(
     matches_word_groups_func: Optional[Callable] = None,
     load_frequency_words_func: Optional[Callable] = None,
     show_new_section: bool = True,
+    dedup_similarity_threshold: float = 0.0,
+    dedup_min_norm_len: int = 6,
 ) -> Dict:
     """
     准备报告数据
@@ -41,6 +45,8 @@ def prepare_report_data(
         Dict: 准备好的报告数据
     """
     processed_new_titles = []
+    global_seen_exact_keys: set = set()
+    global_seen_fuzzy_index: dict = {}
 
     # 在增量模式下或配置关闭时隐藏新增新闻区域
     hide_new_section = mode == "incremental" or not show_new_section
@@ -92,6 +98,17 @@ def prepare_report_data(
                     }
                     source_titles.append(processed_title)
 
+                # 同一来源下对“看起来相同”的标题做归一化去重/合并
+                if source_titles:
+                    if dedup_similarity_threshold and dedup_similarity_threshold > 0:
+                        source_titles, _ = dedup_titles_fuzzy(
+                            source_titles,
+                            similarity_threshold=dedup_similarity_threshold,
+                            min_norm_len=dedup_min_norm_len,
+                        )
+                    else:
+                        source_titles, _ = dedup_titles(source_titles)
+
                 if source_titles:
                     processed_new_titles.append(
                         {
@@ -118,13 +135,31 @@ def prepare_report_data(
                 "url": title_data.get("url", ""),
                 "mobile_url": title_data.get("mobileUrl", ""),
                 "is_new": title_data.get("is_new", False),
+                "matched_keyword": title_data.get("matched_keyword", ""),
             }
             processed_titles.append(processed_title)
+
+        # 同一关键词组内合并重复标题；并在同一份报告内跨关键词组去重，避免同一来源重复出现
+        if dedup_similarity_threshold and dedup_similarity_threshold > 0:
+            processed_titles, global_seen_fuzzy_index = dedup_titles_fuzzy(
+                processed_titles,
+                similarity_threshold=dedup_similarity_threshold,
+                min_norm_len=dedup_min_norm_len,
+                seen_index=global_seen_fuzzy_index,
+            )
+        else:
+            processed_titles, global_seen_exact_keys = dedup_titles(
+                processed_titles, seen_keys=global_seen_exact_keys
+            )
+
+        if not processed_titles:
+            continue
 
         processed_stats.append(
             {
                 "word": stat["word"],
-                "count": stat["count"],
+                # count 与展示保持一致（去重后按可见条目数计）
+                "count": len(processed_titles),
                 "percentage": stat.get("percentage", 0),
                 "titles": processed_titles,
             }
@@ -155,6 +190,8 @@ def generate_html_report(
     render_html_func: Optional[Callable] = None,
     matches_word_groups_func: Optional[Callable] = None,
     load_frequency_words_func: Optional[Callable] = None,
+    dedup_similarity_threshold: float = 0.0,
+    dedup_min_norm_len: int = 6,
 ) -> str:
     """
     生成 HTML 报告
@@ -201,6 +238,8 @@ def generate_html_report(
         rank_threshold,
         matches_word_groups_func,
         load_frequency_words_func,
+        dedup_similarity_threshold=dedup_similarity_threshold,
+        dedup_min_norm_len=dedup_min_norm_len,
     )
 
     # 渲染 HTML 内容

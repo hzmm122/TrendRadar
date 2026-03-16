@@ -127,6 +127,16 @@ class AppContext:
         return self.config.get("DISPLAY", {}).get("REGIONS", {}).get("NEW_ITEMS", True)
 
     @property
+    def title_dedup_similarity_threshold(self) -> float:
+        """标题去重：相似度合并阈值（0=仅精确去重）。"""
+        return float(self.config.get("TITLE_DEDUP_SIMILARITY_THRESHOLD", 0.0) or 0.0)
+
+    @property
+    def title_dedup_min_norm_len(self) -> int:
+        """标题去重：参与相似度比较的最小归一化长度。"""
+        return int(self.config.get("TITLE_DEDUP_MIN_NORM_LEN", 6) or 6)
+
+    @property
     def region_order(self) -> List[str]:
         """获取区域显示顺序"""
         default_order = ["hotlist", "rss", "new_items", "standalone", "ai_analysis"]
@@ -281,6 +291,8 @@ class AppContext:
             matches_word_groups_func=self.matches_word_groups,
             load_frequency_words_func=self.load_frequency_words,
             show_new_section=self.show_new_section,
+            dedup_similarity_threshold=self.title_dedup_similarity_threshold,
+            dedup_min_norm_len=self.title_dedup_min_norm_len,
         )
 
     def generate_html(
@@ -313,6 +325,8 @@ class AppContext:
             render_html_func=lambda *args, **kwargs: self.render_html(*args, rss_items=rss_items, rss_new_items=rss_new_items, ai_analysis=ai_analysis, standalone_data=standalone_data, **kwargs),
             matches_word_groups_func=self.matches_word_groups,
             load_frequency_words_func=self.load_frequency_words,
+            dedup_similarity_threshold=self.title_dedup_similarity_threshold,
+            dedup_min_norm_len=self.title_dedup_min_norm_len,
         )
 
     def render_html(

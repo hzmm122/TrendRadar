@@ -45,6 +45,17 @@ def _get_env_int_or_none(key: str) -> Optional[int]:
         return None
 
 
+def _get_env_float_or_none(key: str) -> Optional[float]:
+    """从环境变量获取浮点值，未设置时返回 None"""
+    value = os.environ.get(key, "").strip()
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
 def _get_env_str(key: str, default: str = "") -> str:
     """从环境变量获取字符串值"""
     return os.environ.get(key, "").strip() or default
@@ -79,10 +90,13 @@ def _load_crawler_config(config_data: Dict) -> Dict:
 def _load_report_config(config_data: Dict) -> Dict:
     """加载报告配置"""
     report_config = config_data.get("report", {})
+    dedup = report_config.get("dedup", {}) or {}
 
     # 环境变量覆盖
     sort_by_position_env = _get_env_bool("SORT_BY_POSITION_FIRST")
     max_news_env = _get_env_int("MAX_NEWS_PER_KEYWORD")
+    dedup_similarity_env = _get_env_float_or_none("TITLE_DEDUP_SIMILARITY_THRESHOLD")
+    dedup_min_norm_len_env = _get_env_int_or_none("TITLE_DEDUP_MIN_NORM_LEN")
 
     return {
         "REPORT_MODE": report_config.get("mode", "daily"),
@@ -90,6 +104,16 @@ def _load_report_config(config_data: Dict) -> Dict:
         "RANK_THRESHOLD": report_config.get("rank_threshold", 10),
         "SORT_BY_POSITION_FIRST": sort_by_position_env if sort_by_position_env is not None else report_config.get("sort_by_position_first", False),
         "MAX_NEWS_PER_KEYWORD": max_news_env or report_config.get("max_news_per_keyword", 0),
+        "TITLE_DEDUP_SIMILARITY_THRESHOLD": (
+            dedup_similarity_env
+            if dedup_similarity_env is not None
+            else dedup.get("similarity_threshold", 0.0)
+        ),
+        "TITLE_DEDUP_MIN_NORM_LEN": (
+            dedup_min_norm_len_env
+            if dedup_min_norm_len_env is not None
+            else dedup.get("min_norm_len", 6)
+        ),
     }
 
 
