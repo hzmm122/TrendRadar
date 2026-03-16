@@ -187,6 +187,18 @@ def _sync_from_github(repo: str, branch: str, token: str, date_str: str) -> int:
         dest = base_dir / db_rel
         if _download_if_exists(repo, branch, repo_path, token, dest):
             pulled += 1
+
+    # Pull latest HTMLs so AI-only mode can patch AI section + email the report reliably.
+    for html_rel in (
+        Path("index.html"),
+        Path("html") / "latest" / "daily.html",
+        Path("html") / "latest" / "current.html",
+        Path("html") / "latest" / "incremental.html",
+    ):
+        repo_path = f"output/{html_rel.as_posix()}"
+        dest = base_dir / html_rel
+        if _download_if_exists(repo, branch, repo_path, token, dest):
+            pulled += 1
     return pulled
 
 def _sync_to_github(repo: str, branch: str, token: str, date_str: str) -> dict:
@@ -264,6 +276,8 @@ class handler(BaseHTTPRequestHandler):
         query = parse_qs(urlparse(self.path).query)
         fast = (query.get("fast") or [""])[0].strip().lower() in ("1", "true", "yes")
         ai_only = (query.get("ai_only") or [""])[0].strip().lower() in ("1", "true", "yes")
+        notify_raw = (query.get("notify") or [""])[0].strip().lower()
+        notify = notify_raw not in ("0", "false", "no")
         ai_max_raw = (query.get("ai_max") or [""])[0].strip()
         if fast:
             # Fast mode skips AI analysis to keep request under cron-job.org timeout.
@@ -311,6 +325,9 @@ class handler(BaseHTTPRequestHandler):
             config["STORAGE"].setdefault("LOCAL", {})
             config["STORAGE"]["LOCAL"]["DATA_DIR"] = data_dir
             config["STORAGE"]["BACKEND"] = "local"
+            if not notify:
+                # Per-request override: allow running "collect only" jobs without sending any notification.
+                config["ENABLE_NOTIFICATION"] = False
             if ai_only and ai_max_raw:
                 try:
                     ai_max = max(1, int(ai_max_raw))
@@ -440,6 +457,7 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         return self.do_GET()
+
 
 
 
